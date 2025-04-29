@@ -113,6 +113,14 @@ $menus = $wpdb->get_results($wpdb->prepare(
                         </td>
                     </tr>
                     <tr>
+                        <th scope="row"><?php _e('Background Image', 'daily-menu-manager'); ?></th>
+                        <td>
+                            <input type="text" id="background_image" name="background_image" class="regular-text" value="">
+                            <button type="button" id="upload-bg-image" class="button"><?php _e('Upload Image', 'daily-menu-manager'); ?></button>
+                            <p class="description"><?php _e('Select a background image for this menu (optional)', 'daily-menu-manager'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row"><?php _e('Preview', 'daily-menu-manager'); ?></th>
                         <td>
                             <div id="menu-preview-container" style="position: relative; width: 100%; height: 150px; background-size: cover; background-position: center; border-radius: 10px; overflow: hidden; margin-bottom: 10px;">
@@ -199,6 +207,7 @@ jQuery(document).ready(function($) {
     function updatePreview() {
         var menuItems = $('#menu_items').val();
         var isSpecial = $('#is_special').is(':checked');
+        var bgImage = $('#background_image').val();
         
         // Update preview text
         $('#menu-preview-text').text(menuItems);
@@ -209,11 +218,60 @@ jQuery(document).ready(function($) {
         } else {
             $('#menu-preview-text').removeClass('dmm-special-preview');
         }
+        
+        // Update background image if provided
+        if(bgImage) {
+            $('#menu-preview-container').css({
+                'background-image': 'url(' + bgImage + ')'
+            });
+        } else {
+            $('#menu-preview-container').css({
+                'background-image': 'none',
+                'background-color': '#f5f5f5'
+            });
+        }
     }
     
     // Trigger preview updates when menu items change
     $('#menu_items').on('input', updatePreview);
     $('#is_special').on('change', updatePreview);
+    $('#background_image').on('input', updatePreview);
+    
+    // Handle background image upload button
+    $('#upload-bg-image').on('click', function(e) {
+        e.preventDefault();
+        
+        var image_frame;
+        
+        if(image_frame) {
+            image_frame.open();
+            return;
+        }
+        
+        // Create the media frame
+        image_frame = wp.media({
+            title: '<?php _e("Select or Upload Background Image", "daily-menu-manager"); ?>',
+            button: {
+                text: '<?php _e("Use this image", "daily-menu-manager"); ?>'
+            },
+            multiple: false
+        });
+        
+        // When an image is selected in the media frame
+        image_frame.on('select', function() {
+            // Get media attachment details from the frame state
+            var attachment = image_frame.state().get('selection').first().toJSON();
+            
+            // Set image url in the input field
+            $('#background_image').val(attachment.url);
+            
+            // Update preview
+            updatePreview();
+        });
+        
+        // Open the modal
+        image_frame.open();        
+    });
     
     // Add CSS for the preview special menu animation
     $('head').append('<style>\n\

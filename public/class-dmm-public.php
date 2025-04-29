@@ -79,6 +79,7 @@ class DMM_Public {
             'style_id' => '',
             'date' => 'all',  // 'all', 'current', or specific date
             'navigation' => '', // '1' or '0' to override settings
+            'roles' => '',     // comma-separated list of roles that can see this menu
         ), $atts, 'daily_menu');
         
         global $wpdb;
@@ -201,6 +202,25 @@ class DMM_Public {
             $show_navigation = false;
         } else {
             $show_navigation = get_option('dmm_display_navigation', 1);
+        }
+        
+        // Check if current user has permission to view this menu based on shortcode roles attribute
+        if (!empty($atts['roles'])) {
+            $allowed_roles = explode(',', $atts['roles']);
+            $current_user = wp_get_current_user();
+            $current_user_roles = $current_user->roles;
+            
+            $has_access = false;
+            foreach ($current_user_roles as $role) {
+                if (in_array($role, $allowed_roles)) {
+                    $has_access = true;
+                    break;
+                }
+            }
+            
+            if (!$has_access) {
+                return '<div class="dmm-no-access">' . __('You do not have permission to view this menu.', 'daily-menu-manager') . '</div>';
+            }
         }
         
         // Start building the output
