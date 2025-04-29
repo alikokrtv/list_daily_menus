@@ -139,6 +139,137 @@ class DMM_Admin {
             'sanitize_callback' => 'sanitize_text_field',
             'default' => '1'
         ));
+        
+        register_setting('dmm_settings', 'dmm_default_style', array(
+            'sanitize_callback' => 'absint',
+            'default' => 1
+        ));
+    }
+
+    /**
+     * Display the dashboard page
+     */
+    public function display_dashboard() {
+        include_once('partials/dmm-admin-dashboard.php');
+    }
+    
+    /**
+     * Display the menu groups page
+     */
+    public function display_menu_groups_page() {
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dmm_menu_groups';
+        
+        // Get all menu groups
+        $menu_groups = $wpdb->get_results("SELECT * FROM $table_name ORDER BY id DESC");
+        
+        include_once('partials/dmm-admin-menu-groups.php');
+    }
+    
+    /**
+     * Display the daily entries page
+     */
+    public function display_daily_entries_page() {
+        global $wpdb;
+        $groups_table = $wpdb->prefix . 'dmm_menu_groups';
+        $entries_table = $wpdb->prefix . 'dmm_menus';
+        
+        // Get all menu groups for the dropdown
+        $menu_groups = $wpdb->get_results("SELECT * FROM $groups_table ORDER BY name ASC");
+        
+        // Get selected group if present
+        $selected_group_id = isset($_GET['group_id']) ? intval($_GET['group_id']) : 0;
+        
+        // Get entries for selected group
+        $daily_entries = array();
+        if ($selected_group_id > 0) {
+            $daily_entries = $wpdb->get_results($wpdb->prepare(
+                "SELECT * FROM $entries_table WHERE group_id = %d ORDER BY menu_date ASC", 
+                $selected_group_id
+            ));
+        }
+        
+        include_once('partials/dmm-admin-daily-entries.php');
+    }
+    
+    /**
+     * AJAX handler for generating missing daily entries
+     */
+    public function generate_entries_callback() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $entries_table = $wpdb->prefix . 'dmm_menus';
+        $groups_table = $wpdb->prefix . 'dmm_menu_groups';
+        
+        $group_id = isset($_POST['group_id']) ? intval($_POST['group_id']) : 0;
+        
+        if ($group_id <= 0) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => __('Invalid menu group', 'daily-menu-manager')
+            ));
+            return;
+        }
+        
+        // Get group info
+        $group = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $groups_table WHERE id = %d",
+            $group_id
+        ));
+        
+        if (!$group) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => __('Menu group not found', 'daily-menu-manager')
+            ));
+            return;
+        }
+        
+        // Parse start and end dates
+        $start_date = new DateTime($group->start_date);
+        $end_date = new DateTime($group->end_date);
+        
+        // Get existing dates for this group
+        $existing_dates = $wpdb->get_col($wpdb->prepare(
+            "SELECT DATE_FORMAT(menu_date, '%Y-%m-%d') FROM $entries_table WHERE group_id = %d",
+            $group_id
+        ));
+        
+        // Generate entries for each date in the range
+        $current_date = clone $start_date;
+        $entries_added = 0;
+        
+        while ($current_date <= $end_date) {
+            $date_string = $current_date->format('Y-m-d');
+            
+            // Check if entry already exists
+            if (!in_array($date_string, $existing_dates)) {
+                $wpdb->insert(
+                    $entries_table,
+                    array(
+                        'group_id' => $group_id,
+                        'menu_date' => $date_string,
+                        'menu_items' => '',
+                        'is_active' => 1
+                    ),
+                    array('%d', '%s', '%s', '%d')
+                );
+                $entries_added++;
+            }
+            
+            // Move to next day
+            $current_date->modify('+1 day');
+        }
+        
+        wp_send_json(array(
+            'success' => true,
+            'message' => sprintf(__('%d daily entries created successfully', 'daily-menu-manager'), $entries_added)
+        ));
+    }
         register_setting('dmm_settings', 'dmm_default_style', array(
             'sanitize_callback' => 'absint',
             'default' => 1
