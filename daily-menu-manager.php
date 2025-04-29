@@ -23,28 +23,37 @@ if (!defined('WPINC')) {
 define('DMM_VERSION', '1.0.0');
 define('DMM_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('DMM_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('DMM_ADMIN_URL', admin_url('admin.php?page=daily-menu-manager'));
-
-// Include required files
-require_once DMM_PLUGIN_DIR . 'includes/class-dmm-activator.php';
-require_once DMM_PLUGIN_DIR . 'includes/class-dmm-deactivator.php';
-require_once DMM_PLUGIN_DIR . 'includes/class-dmm-loader.php';
-require_once DMM_PLUGIN_DIR . 'includes/class-dmm-i18n.php';
-require_once DMM_PLUGIN_DIR . 'includes/class-daily-menu-manager.php';
-require_once DMM_PLUGIN_DIR . 'admin/class-dmm-admin.php';
-require_once DMM_PLUGIN_DIR . 'public/class-dmm-public.php';
-
-// Activation hook
-register_activation_hook(__FILE__, array('DMM_Activator', 'activate'));
-
-// Deactivation hook
-register_deactivation_hook(__FILE__, array('DMM_Deactivator', 'deactivate'));
 
 /**
- * Start the plugin execution
+ * The code that runs during plugin activation.
+ */
+function activate_daily_menu_manager() {
+    require_once plugin_dir_path(__FILE__) . 'includes/class-dmm-activator.php';
+    DMM_Activator::activate();
+}
+
+/**
+ * The code that runs during plugin deactivation.
+ */
+function deactivate_daily_menu_manager() {
+    require_once plugin_dir_path(__FILE__) . 'includes/class-dmm-deactivator.php';
+    DMM_Deactivator::deactivate();
+}
+
+register_activation_hook(__FILE__, 'activate_daily_menu_manager');
+register_deactivation_hook(__FILE__, 'deactivate_daily_menu_manager');
+
+/**
+ * The core plugin class that is used to define internationalization,
+ * admin-specific hooks, and public-facing site hooks.
+ */
+require plugin_dir_path(__FILE__) . 'includes/class-dmm.php';
+
+/**
+ * Begins execution of the plugin.
  */
 function run_daily_menu_manager() {
-    $plugin = new Daily_Menu_Manager();
+    $plugin = new DMM();
     $plugin->run();
 }
 
