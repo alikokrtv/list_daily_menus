@@ -15,6 +15,30 @@ class DMM_Activator {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
         
+        // Check if we have the old table structure
+        $old_table_name = $wpdb->prefix . 'dmm_menus';
+        $old_table_exists = $wpdb->get_var("SHOW TABLES LIKE '$old_table_name'") === $old_table_name;
+        
+        if ($old_table_exists) {
+            // Check if the old table has the location column (old structure)
+            $old_columns = $wpdb->get_results("SHOW COLUMNS FROM $old_table_name");
+            $has_old_structure = false;
+            foreach ($old_columns as $column) {
+                if ($column->Field === 'location') {
+                    $has_old_structure = true;
+                    break;
+                }
+            }
+            
+            if ($has_old_structure) {
+                // This is the old structure, we need to convert it
+                self::upgrade_database();
+                return;
+            }
+        }
+        
+        // If we get here, either we're doing a fresh install or the tables are already in the new structure
+        
         // Create the menu_groups table (for monthly/period menus)
         $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}dmm_menu_groups (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
@@ -46,14 +70,13 @@ class DMM_Activator {
         
         // Create styles table
         $style_table = $wpdb->prefix . 'dmm_styles';
-        $style_sql = "CREATE TABLE $style_table (
+        $sql = "CREATE TABLE IF NOT EXISTS $style_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            style_name varchar(255) NOT NULL,
+            style_name varchar(100) NOT NULL,
             font_family varchar(255) DEFAULT 'Arial, sans-serif',
             font_size varchar(50) DEFAULT '16px',
             text_color varchar(50) DEFAULT '#000000',
             background_color varchar(50) DEFAULT '#FFFFFF',
-            background_image text DEFAULT '',
             container_width varchar(50) DEFAULT '100%',
             border_style varchar(255) DEFAULT 'none',
             is_default tinyint(1) DEFAULT 0,
@@ -75,9 +98,9 @@ class DMM_Activator {
         dbDelta($style_sql);
         dbDelta($locations_sql);
         
-        // Add default style
-        $default_style_exists = $wpdb->get_var("SELECT COUNT(*) FROM $style_table WHERE is_default = 1");
-        if ($default_style_exists == 0) {
+        // Insert default style if none exists
+        $style_count = $wpdb->get_var("SELECT COUNT(*) FROM $style_table");
+        if ($style_count == 0) {
             $wpdb->insert(
                 $style_table,
                 array(
