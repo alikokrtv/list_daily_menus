@@ -43,13 +43,11 @@ class DMM_Activator {
         // Create the menu_groups table (for monthly/period menus)
         $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}dmm_menu_groups (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            title varchar(100) NOT NULL,
-            location varchar(100) NOT NULL,
-            period_start date NOT NULL,
-            period_end date NOT NULL,
+            name varchar(100) NOT NULL,
+            description text DEFAULT '',
+            start_date date NOT NULL,
+            end_date date NOT NULL,
             is_active tinyint(1) DEFAULT 1,
-            bg_image varchar(255) DEFAULT '',
-            allowed_roles text DEFAULT '',
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
         ) $charset_collate;";
@@ -124,13 +122,11 @@ class DMM_Activator {
         $temp_group_table = $wpdb->prefix . 'dmm_menu_groups_temp';
         $sql = "CREATE TABLE IF NOT EXISTS $temp_group_table (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
-            title varchar(100) NOT NULL,
-            location varchar(100) NOT NULL,
-            period_start date NOT NULL,
-            period_end date NOT NULL,
+            name varchar(100) NOT NULL,
+            description text DEFAULT '',
+            start_date date NOT NULL,
+            end_date date NOT NULL,
             is_active tinyint(1) DEFAULT 1,
-            bg_image varchar(255) DEFAULT '',
-            allowed_roles text DEFAULT '',
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
         ) $charset_collate;";

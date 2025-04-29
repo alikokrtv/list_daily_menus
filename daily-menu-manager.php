@@ -19,6 +19,15 @@ if (!defined('WPINC')) {
     die;
 }
 
+// Enable debugging if not already enabled
+if (!defined('WP_DEBUG')) {
+    // You can edit wp-config.php to enable debugging permanently
+    // This is just temporary for this session
+    @ini_set('display_errors', 1);
+    @ini_set('display_startup_errors', 1);
+    error_reporting(E_ALL);
+}
+
 // Define plugin constants
 define('DMM_VERSION', '1.0.0');
 define('DMM_PLUGIN_DIR', plugin_dir_path(__FILE__));
