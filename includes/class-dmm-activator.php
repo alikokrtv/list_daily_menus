@@ -15,17 +15,34 @@ class DMM_Activator {
         global $wpdb;
         $charset_collate = $wpdb->get_charset_collate();
         
-        // Create menus table
-        $table_name = $wpdb->prefix . 'dmm_menus';
-        $sql = "CREATE TABLE $table_name (
+        // Create the menu_groups table (for monthly/period menus)
+        $sql = "CREATE TABLE IF NOT EXISTS {$wpdb->prefix}dmm_menu_groups (
             id mediumint(9) NOT NULL AUTO_INCREMENT,
+            title varchar(100) NOT NULL,
+            location varchar(100) NOT NULL,
+            period_start date NOT NULL,
+            period_end date NOT NULL,
+            is_active tinyint(1) DEFAULT 1,
+            bg_image varchar(255) DEFAULT '',
+            allowed_roles text DEFAULT '',
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        dbDelta($sql);
+        
+        // Create the daily menus table (for daily entries within a menu group)
+        $table_name = $wpdb->prefix . 'dmm_menus';
+        $sql = "CREATE TABLE IF NOT EXISTS $table_name (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            group_id mediumint(9) NOT NULL,
             menu_date date NOT NULL,
             menu_items text NOT NULL,
             is_special tinyint(1) DEFAULT 0,
-            location varchar(255) DEFAULT '',
-            allowed_roles text DEFAULT NULL,
-            PRIMARY KEY  (id)
+            PRIMARY KEY (id),
+            KEY group_id (group_id),
+            KEY menu_date (menu_date)
         ) $charset_collate;";
+        dbDelta($sql);
         
         // Create styles table
         $style_table = $wpdb->prefix . 'dmm_styles';

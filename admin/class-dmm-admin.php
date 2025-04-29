@@ -44,6 +44,7 @@ class DMM_Admin {
      * @since    1.0.0
      */
     public function enqueue_styles() {
+        wp_enqueue_style('jquery-ui-css', 'https://code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css');
         wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/dmm-admin.css', array(), $this->version, 'all');
         // Include WordPress color picker
         wp_enqueue_style('wp-color-picker');
@@ -55,10 +56,12 @@ class DMM_Admin {
      * @since    1.0.0
      */
     public function enqueue_scripts() {
-        wp_enqueue_script($this->plugin_name, plugin_dir_url(__FILE__) . 'js/dmm-admin.js', array('jquery', 'wp-color-picker'), $this->version, false);
+        wp_enqueue_script('jquery-ui-datepicker');
+        wp_enqueue_script($this->plugin_name, plugin_dir_url(__FILE__) . 'js/dmm-admin.js', array('jquery', 'jquery-ui-datepicker', 'wp-color-picker'), $this->version, false);
+        
+        // Localize the script with new data
         wp_localize_script($this->plugin_name, 'dmm_ajax', array(
-            'ajax_url' => admin_url('admin-ajax.php'),
-            'nonce' => wp_create_nonce('dmm_nonce')
+            'ajax_url' => admin_url('admin-ajax.php')
         ));
         
         // Include WordPress media uploader
@@ -67,46 +70,40 @@ class DMM_Admin {
     
     /**
      * Add menu pages to the admin area
-     *
-     * @since    1.0.0
      */
-    public function add_plugin_admin_menu() {
-        // Main menu item
+    public function register_menu_pages() {
         add_menu_page(
-            __('Daily Menu Manager', 'daily-menu-manager'),
-            __('Menu Manager', 'daily-menu-manager'),
+            'Daily Menu Manager',
+            'Menu Manager',
             'manage_options',
-            'daily-menu-manager',
-            array($this, 'display_plugin_admin_dashboard'),
+            'dmm-dashboard',
+            array($this, 'display_dashboard'),
             'dashicons-food',
-            26
+            30
         );
         
-        // Submenu - Manage Menus
         add_submenu_page(
-            'daily-menu-manager',
-            __('Manage Menus', 'daily-menu-manager'),
-            __('Manage Menus', 'daily-menu-manager'),
+            'dmm-dashboard',
+            'Menu Groups',
+            'Menu Groups',
             'manage_options',
-            'daily-menu-manager',
-            array($this, 'display_plugin_admin_dashboard')
+            'dmm-menu-groups',
+            array($this, 'display_menu_groups_page')
         );
         
-        // Submenu - Import Excel
         add_submenu_page(
-            'daily-menu-manager',
-            __('Import from Excel', 'daily-menu-manager'),
-            __('Import Excel', 'daily-menu-manager'),
+            'dmm-dashboard',
+            'Daily Entries',
+            'Daily Entries',
             'manage_options',
-            'dmm-import-excel',
-            array($this, 'display_plugin_import_excel')
+            'dmm-daily-entries',
+            array($this, 'display_daily_entries_page')
         );
         
-        // Submenu - Styling Options
         add_submenu_page(
-            'daily-menu-manager',
-            __('Styling Options', 'daily-menu-manager'),
-            __('Styling', 'daily-menu-manager'),
+            'dmm-dashboard',
+            'Menu Styles',
+            'Menu Styles',
             'manage_options',
             'dmm-styling',
             array($this, 'display_plugin_styling')
@@ -138,10 +135,22 @@ class DMM_Admin {
      */
     public function register_settings() {
         // Register setting for plugin settings page
-        register_setting('dmm_settings', 'dmm_display_navigation');
-        register_setting('dmm_settings', 'dmm_default_style');
-        register_setting('dmm_settings', 'dmm_excel_delimiter');
-        register_setting('dmm_settings', 'dmm_date_format');
+        register_setting('dmm_settings', 'dmm_display_navigation', array(
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '1'
+        ));
+        register_setting('dmm_settings', 'dmm_default_style', array(
+            'sanitize_callback' => 'absint',
+            'default' => 1
+        ));
+        register_setting('dmm_settings', 'dmm_excel_delimiter', array(
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => ','
+        ));
+        register_setting('dmm_settings', 'dmm_date_format', array(
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => 'd/m/Y'
+        ));
     }
     
     /**
@@ -433,16 +442,29 @@ class DMM_Admin {
         foreach ($rows as $row) {
             if (empty(trim($row))) continue;
             
-            $columns = str_getcsv($row, $delimiter);
-            
-            if (count($columns) < 2) {
+            // Use a custom delimiter recognition to properly handle menu items with commas
+            // First column is the date
+            $date_pos = strpos($row, $delimiter);
+            if ($date_pos === false) {
                 $error_count++;
                 continue;
             }
             
-            $menu_date = trim($columns[0]);
-            $menu_items = trim($columns[1]);
-            $is_special = isset($columns[2]) && trim($columns[2]) === '1' ? 1 : 0;
+            $menu_date = trim(substr($row, 0, $date_pos));
+            
+            // Last column might be the special flag (0 or 1)
+            $remaining = substr($row, $date_pos + 1);
+            $is_special = 0;
+            
+            // Check if the last character is 0 or 1 preceded by a delimiter
+            if (preg_match('/,\s*(0|1)\s*$/', $remaining, $matches)) {
+                $is_special = (int)trim($matches[1]);
+                // Remove the special flag from the menu items
+                $remaining = preg_replace('/,\s*(0|1)\s*$/', '', $remaining);
+            }
+            
+            // Everything between first delimiter and special flag (or end) is the menu items
+            $menu_items = trim($remaining);
             
             // Validate and format date
             $menu_date_obj = DateTime::createFromFormat($date_format, $menu_date);

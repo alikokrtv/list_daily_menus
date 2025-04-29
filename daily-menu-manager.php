@@ -4,7 +4,7 @@ Plugin Name: Daily Menu Manager
 Description: Comprehensive menu management plugin with admin panel, styling options, and Excel import
 Version: 1.0.0
 Author: alikok
-Author URI: mailto:alikokrtv@gmail.com
+Author URI: https://profiles.wordpress.org/alikok/
 Text Domain: daily-menu-manager
 License: GPL-2.0+
 License URI: http://www.gnu.org/licenses/gpl-2.0.txt

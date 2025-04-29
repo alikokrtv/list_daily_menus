@@ -78,7 +78,11 @@ Example / Örnek:
 
 ## Support / Destek
 
+<<<<<<< HEAD
 For support or feature requests, please contact [alikokrtv@gmail.com](mailto:alikokrtv@gmail.com) / Destek veya özellik istekleri için lütfen [alikokrtv@gmail.com](mailto:alikokrtv@gmail.com) adresine e-posta gönderin
+=======
+For support or feature requests, please visit [alikokdeneysel.online](alikokrtv@gmail.com) / Destek veya özellik istekleri için lütfen [alikokdeneysel.online](alikokrtv@gmail.com) adresini ziyaret edin
+>>>>>>> ebe3d662a8fa17eaf851fd1db7427b383972bf0d
 
 ## License / Lisans
 

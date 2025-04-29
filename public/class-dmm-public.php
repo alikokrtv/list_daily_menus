@@ -71,18 +71,24 @@ class DMM_Public {
     
     /**
      * Shortcode for displaying daily menus
+     * 
+     * @param array $atts Shortcode attributes
+     * @return string HTML output
      */
     public function daily_menu_shortcode($atts) {
         // Extract shortcode attributes
         $atts = shortcode_atts(array(
-            'location' => '',
-            'style_id' => '',
-            'date' => 'all',  // 'all', 'current', or specific date
+            'group_id' => '',   // Can specify a specific menu group by ID
+            'location' => '',   // Or filter by location
+            'style_id' => '',   // Style ID to use
+            'date' => 'current', // 'all', 'current', or specific date
             'navigation' => '', // '1' or '0' to override settings
             'roles' => '',     // comma-separated list of roles that can see this menu
         ), $atts, 'daily_menu');
         
         global $wpdb;
+        $menu_groups_table = $wpdb->prefix . 'dmm_menu_groups';
+        $menus_table = $wpdb->prefix . 'dmm_menus';
         
         // Get default style if not specified
         if (empty($atts['style_id'])) {
@@ -118,12 +124,42 @@ class DMM_Public {
             );
         }
         
-        // Get locations
-        $locations_table = $wpdb->prefix . 'dmm_locations';
-        if (empty($atts['location'])) {
-            // Use first active location if none specified
-            $location = $wpdb->get_var("SELECT location_name FROM $locations_table WHERE is_active = 1 LIMIT 1");
-            if (!$location) {
+        // Find the appropriate menu group
+        $group_query = "SELECT * FROM $menu_groups_table WHERE is_active = 1";
+        $group_args = array();
+        
+        // Filter by specific group ID if provided
+        if (!empty($atts['group_id'])) {
+            $group_query .= " AND id = %d";
+            $group_args[] = intval($atts['group_id']);
+        }
+        // Or filter by location if provided
+        elseif (!empty($atts['location'])) {
+            $group_query .= " AND location = %s";
+            $group_args[] = sanitize_text_field($atts['location']);
+        }
+        
+        // Find groups that include today's date
+        if ($atts['date'] == 'current') {
+            $today = date('Y-m-d');
+            $group_query .= " AND period_start <= %s AND period_end >= %s";
+            $group_args[] = $today;
+            $group_args[] = $today;
+        }
+        
+        // Order by most recent period first
+        $group_query .= " ORDER BY period_start DESC LIMIT 1";
+        
+        // Prepare and execute the group query
+        if (!empty($group_args)) {
+            $prepared_group_query = $wpdb->prepare($group_query, $group_args);
+        } else {
+            $prepared_group_query = $group_query;
+        }
+        
+        $menu_group = $wpdb->get_row($prepared_group_query);
+        
+        if (!$menu_group) {
                 $location = 'Default Location';
             }
         } else {
@@ -181,37 +217,30 @@ class DMM_Public {
             foreach ($current_user_roles as $role) {
                 if (in_array($role, $allowed_roles)) {
                     $has_access = true;
-                    break;
+                }
+                
+                if (!$has_access) {
+                    return '<p>' . __('You do not have permission to view this menu.', 'daily-menu-manager') . '</p>';
                 }
             }
-            
-            // Add menu if user has access
-            if ($has_access) {
-                $filtered_menus[] = $menu;
-            }
         }
         
-        // Replace original menus with filtered ones
-        $menus = $filtered_menus;
-        
-        // Check if we should show navigation buttons
-        $show_navigation = false;
-        if ($atts['navigation'] === '1') {
-            $show_navigation = true;
-        } elseif ($atts['navigation'] === '0') {
-            $show_navigation = false;
-        } else {
-            $show_navigation = get_option('dmm_display_navigation', 1);
-        }
-        
-        // Check if current user has permission to view this menu based on shortcode roles attribute
+        // Also check shortcode role restrictions
         if (!empty($atts['roles'])) {
             $allowed_roles = explode(',', $atts['roles']);
-            $current_user = wp_get_current_user();
-            $current_user_roles = $current_user->roles;
+            $allowed_roles = array_map('trim', $allowed_roles);
             
+            // Check if user has any of the allowed roles
+            $current_user = wp_get_current_user();
+            if ($current_user->ID == 0) {
+                // Not logged in
+                return '<p>' . __('This menu is restricted to specific user roles. Please log in to view it.', 'daily-menu-manager') . '</p>';
+            }
+            
+            $user_roles = $current_user->roles;
             $has_access = false;
-            foreach ($current_user_roles as $role) {
+            
+            foreach ($user_roles as $role) {
                 if (in_array($role, $allowed_roles)) {
                     $has_access = true;
                     break;
@@ -219,20 +248,49 @@ class DMM_Public {
             }
             
             if (!$has_access) {
-                return '<div class="dmm-no-access">' . __('You do not have permission to view this menu.', 'daily-menu-manager') . '</div>';
+                return '<p>' . __('You do not have permission to view this menu.', 'daily-menu-manager') . '</p>';
             }
         }
+        
+        // Set up query for daily entries
+        $query = "SELECT * FROM $menus_table WHERE group_id = %d";
+        $args = array($menu_group->id);
         
         // Start building the output
         $output = '<div class="dmm-container" style="width: ' . esc_attr($style->container_width) . ';">';
         
         // If no menus found
+        $menus = $wpdb->get_results($wpdb->prepare($query, $args));
+        
         if (empty($menus)) {
             $output .= '<div class="dmm-no-menus" style="text-align: center; padding: 20px; font-family: ' . esc_attr($style->font_family) . ';">';
-            $output .= __('No menus found for this location.', 'daily-menu-manager');
+            $output .= __('No menu entries found for this date range.', 'daily-menu-manager');
             $output .= '</div>';
             $output .= '</div>'; // Close .dmm-container
             return $output;
+        }
+        
+        // Add menu group title to the output
+        $output .= '<h2 class="dmm-group-title" style="text-align: center; font-family: ' . esc_attr($style->font_family) . '; margin-bottom: 15px;">' . esc_html($menu_group->title) . '</h2>';
+        
+        // Filter by date if needed
+        if ($atts['date'] === 'current') {
+            $today = date('Y-m-d');
+            $filtered_menus = array();
+            
+            foreach ($menus as $menu) {
+                if ($menu->menu_date === $today) {
+                    $filtered_menus[] = $menu;
+                    break; // Only need one menu for today
+                }
+            }
+            
+            // If no menu for today, use first available
+            if (empty($filtered_menus) && !empty($menus)) {
+                $filtered_menus[] = $menus[0];
+            }
+            
+            $menus = $filtered_menus;
         }
         
         // Create date options for select
@@ -346,10 +404,12 @@ class DMM_Public {
         $output .= '</form>';
         $output .= '</div>'; // Close .dmm-selector-container
         
-        // Create menu display container with style applied
+        // Create menu display container with style applied - use menu group background if available, otherwise style background
+        $background_image = !empty($menu_group->bg_image) ? $menu_group->bg_image : (!empty($style->background_image) ? $style->background_image : '');
+        
         $output .= '<div id="dmm-menu-container" style="
             position: relative;
-            background-image: ' . (empty($style->background_image) ? 'none' : 'url(\'' . esc_url($style->background_image) . '\')') . ';
+            background-image: ' . (empty($background_image) ? 'none' : 'url(\'' . esc_url($background_image) . '\')') . ';
             background-size: cover;
             background-position: center;
             border: ' . esc_attr($style->border_style) . ';
