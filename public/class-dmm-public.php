@@ -160,16 +160,13 @@ class DMM_Public {
         $menu_group = $wpdb->get_row($prepared_group_query);
         
         if (!$menu_group) {
-                $location = 'Default Location';
-            }
-        } else {
-            $location = $atts['location'];
+            return '<p>' . __('No active menu found for the selected criteria.', 'daily-menu-manager') . '</p>';
         }
         
         // Build query for menus
         $menus_table = $wpdb->prefix . 'dmm_menus';
-        $query = "SELECT * FROM $menus_table WHERE location = %s";
-        $query_params = array($location);
+        $query = "SELECT * FROM $menus_table WHERE group_id = %d";
+        $query_params = array($menu_group->id);
         
         // Filter by date if needed
         if ($atts['date'] == 'current') {
