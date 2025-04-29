@@ -78,7 +78,7 @@ Example / Örnek:
 
 ## Support / Destek
 
-For support or feature requests, please visit [alikokdeneysel.online](https://alikokdeneysel.online) / Destek veya özellik istekleri için lütfen [alikokdeneysel.online](https://alikokdeneysel.online) adresini ziyaret edin
+For support or feature requests, please contact [alikokrtv@gmail.com](mailto:alikokrtv@gmail.com) / Destek veya özellik istekleri için lütfen [alikokrtv@gmail.com](mailto:alikokrtv@gmail.com) adresine e-posta gönderin
 
 ## License / Lisans
 
