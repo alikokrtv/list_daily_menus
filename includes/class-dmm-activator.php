@@ -9,7 +9,8 @@
 class DMM_Activator {
 
     /**
-     * Create necessary database tables and set up default options during activation
+     * Called when the plugin is activated.
+     * Create necessary database tables and default data.
      */
     public static function activate() {
         global $wpdb;
@@ -52,6 +53,8 @@ class DMM_Activator {
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id)
         ) $charset_collate;";
+        
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
         
         // Create the daily menus table (for daily entries within a menu group)
@@ -82,21 +85,7 @@ class DMM_Activator {
             is_default tinyint(1) DEFAULT 0,
             PRIMARY KEY  (id)
         ) $charset_collate;";
-        
-        // Create locations table
-        $locations_table = $wpdb->prefix . 'dmm_locations';
-        $locations_sql = "CREATE TABLE $locations_table (
-            id mediumint(9) NOT NULL AUTO_INCREMENT,
-            location_name varchar(255) NOT NULL,
-            location_description text DEFAULT '',
-            is_active tinyint(1) DEFAULT 1,
-            PRIMARY KEY  (id)
-        ) $charset_collate;";
-        
-        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
         dbDelta($sql);
-        dbDelta($style_sql);
-        dbDelta($locations_sql);
         
         // Insert default style if none exists
         $style_count = $wpdb->get_var("SELECT COUNT(*) FROM $style_table");
@@ -108,24 +97,10 @@ class DMM_Activator {
                     'font_family' => 'Arial, sans-serif',
                     'font_size' => '16px',
                     'text_color' => '#FFFFFF',
-                    'background_color' => 'rgba(0, 0, 0, 0.2)',
-                    'background_image' => 'https://portal.pluskitchen.com.tr/wp-content/uploads/brizy/imgs/i-624x417x0x40x624x337x1713185391.webp',
+                    'background_color' => 'rgba(0, 0, 0, 0.6)',
                     'container_width' => '100%',
-                    'border_style' => 'none',
+                    'border_style' => '1px solid #ddd',
                     'is_default' => 1
-                )
-            );
-        }
-        
-        // Add default location
-        $default_location_exists = $wpdb->get_var("SELECT COUNT(*) FROM $locations_table");
-        if ($default_location_exists == 0) {
-            $wpdb->insert(
-                $locations_table,
-                array(
-                    'location_name' => 'Default Location',
-                    'location_description' => 'Default location for menus',
-                    'is_active' => 1
                 )
             );
         }
@@ -135,5 +110,107 @@ class DMM_Activator {
         add_option('dmm_default_style', 1);
         add_option('dmm_excel_delimiter', ',');
         add_option('dmm_date_format', 'd/m/Y');
+    }
+    
+    /**
+     * Upgrade the database from old structure to new structure
+     */
+    public static function upgrade_database() {
+        global $wpdb;
+        $charset_collate = $wpdb->get_charset_collate();
+        require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
+        
+        // First, create the new tables without disturbing the existing ones
+        $temp_group_table = $wpdb->prefix . 'dmm_menu_groups_temp';
+        $sql = "CREATE TABLE IF NOT EXISTS $temp_group_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            title varchar(100) NOT NULL,
+            location varchar(100) NOT NULL,
+            period_start date NOT NULL,
+            period_end date NOT NULL,
+            is_active tinyint(1) DEFAULT 1,
+            bg_image varchar(255) DEFAULT '',
+            allowed_roles text DEFAULT '',
+            created_at datetime DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id)
+        ) $charset_collate;";
+        $wpdb->query($sql);
+        
+        $temp_menu_table = $wpdb->prefix . 'dmm_menus_temp';
+        $sql = "CREATE TABLE IF NOT EXISTS $temp_menu_table (
+            id mediumint(9) NOT NULL AUTO_INCREMENT,
+            group_id mediumint(9) NOT NULL,
+            menu_date date NOT NULL,
+            menu_items text NOT NULL,
+            is_special tinyint(1) DEFAULT 0,
+            PRIMARY KEY (id),
+            KEY group_id (group_id),
+            KEY menu_date (menu_date)
+        ) $charset_collate;";
+        $wpdb->query($sql);
+        
+        // Get all existing menus
+        $old_table = $wpdb->prefix . 'dmm_menus';
+        $old_menus = $wpdb->get_results("SELECT * FROM $old_table ORDER BY menu_date ASC");
+        
+        if (!empty($old_menus)) {
+            // Create a group for existing menus
+            $today = date('Y-m-d');
+            $thirty_days_ago = date('Y-m-d', strtotime('-30 days'));
+            $sixty_days_ahead = date('Y-m-d', strtotime('+60 days'));
+            
+            // Get unique locations
+            $locations = array();
+            foreach ($old_menus as $menu) {
+                if (!empty($menu->location) && !in_array($menu->location, $locations)) {
+                    $locations[] = $menu->location;
+                }
+            }
+            
+            // If no locations defined, use a default
+            if (empty($locations)) {
+                $locations[] = 'Default Location';
+            }
+            
+            // Create a group for each location
+            foreach ($locations as $location) {
+                // Insert into the temp table
+                $wpdb->insert(
+                    $temp_group_table,
+                    array(
+                        'title' => 'Imported Menu - ' . $location,
+                        'location' => $location,
+                        'period_start' => $thirty_days_ago,
+                        'period_end' => $sixty_days_ahead,
+                        'is_active' => 1,
+                        'bg_image' => '',
+                        'allowed_roles' => '',
+                        'created_at' => current_time('mysql')
+                    )
+                );
+                
+                $group_id = $wpdb->insert_id;
+                
+                // Add menus for this location to the new structure
+                foreach ($old_menus as $menu) {
+                    if ((empty($menu->location) && $location === 'Default Location') || $menu->location === $location) {
+                        $wpdb->insert(
+                            $temp_menu_table,
+                            array(
+                                'group_id' => $group_id,
+                                'menu_date' => $menu->menu_date,
+                                'menu_items' => $menu->menu_items,
+                                'is_special' => $menu->is_special
+                            )
+                        );
+                    }
+                }
+            }
+        }
+        
+        // Now we can safely rename tables
+        $wpdb->query("RENAME TABLE $old_table TO {$old_table}_backup");
+        $wpdb->query("RENAME TABLE $temp_menu_table TO $old_table");
+        $wpdb->query("RENAME TABLE $temp_group_table TO {$wpdb->prefix}dmm_menu_groups");
     }
 }
