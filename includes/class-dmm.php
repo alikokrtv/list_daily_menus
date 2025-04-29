@@ -142,6 +142,11 @@ class DMM {
         
         // AJAX handlers
         $this->loader->add_action('wp_ajax_dmm_generate_entries', $plugin_admin, 'generate_entries_callback');
+        $this->loader->add_action('wp_ajax_dmm_save_menu_group', $plugin_admin, 'ajax_save_menu_group');
+        $this->loader->add_action('wp_ajax_dmm_get_menu_group', $plugin_admin, 'ajax_get_menu_group');
+        $this->loader->add_action('wp_ajax_dmm_delete_menu_group', $plugin_admin, 'ajax_delete_menu_group');
+        $this->loader->add_action('wp_ajax_dmm_get_menu_entry', $plugin_admin, 'ajax_get_menu_entry');
+        $this->loader->add_action('wp_ajax_dmm_save_menu_entry', $plugin_admin, 'ajax_save_menu_entry');
     }
 
     /**

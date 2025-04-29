@@ -753,4 +753,242 @@ class DMM_Admin {
         
         wp_send_json($response);
     }
+    
+    /**
+     * AJAX handler for saving menu group
+     */
+    public function ajax_save_menu_group() {
+        // Check nonce
+        if (!isset($_POST['dmm_nonce']) || !wp_verify_nonce($_POST['dmm_nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dmm_menu_groups';
+        
+        $group_id = isset($_POST['group_id']) ? intval($_POST['group_id']) : 0;
+        $name = sanitize_text_field($_POST['group_name']);
+        $description = sanitize_textarea_field($_POST['group_description']);
+        $start_date = sanitize_text_field($_POST['start_date']);
+        $end_date = sanitize_text_field($_POST['end_date']);
+        $is_active = isset($_POST['is_active']) ? 1 : 0;
+        
+        // Validate dates
+        $start_date_obj = new DateTime($start_date);
+        $end_date_obj = new DateTime($end_date);
+        
+        if ($end_date_obj < $start_date_obj) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => __('End date cannot be earlier than start date', 'daily-menu-manager')
+            ));
+            return;
+        }
+        
+        $data = array(
+            'name' => $name,
+            'description' => $description,
+            'start_date' => $start_date,
+            'end_date' => $end_date,
+            'is_active' => $is_active
+        );
+        
+        $format = array('%s', '%s', '%s', '%s', '%d');
+        
+        if ($group_id > 0) {
+            // Update existing group
+            $wpdb->update(
+                $table_name,
+                $data,
+                array('id' => $group_id),
+                $format,
+                array('%d')
+            );
+            $response = array(
+                'success' => true,
+                'message' => __('Menu group updated successfully', 'daily-menu-manager')
+            );
+        } else {
+            // Insert new group
+            $wpdb->insert(
+                $table_name,
+                $data,
+                $format
+            );
+            $response = array(
+                'success' => true,
+                'message' => __('Menu group added successfully', 'daily-menu-manager'),
+                'group_id' => $wpdb->insert_id
+            );
+        }
+        
+        wp_send_json($response);
+    }
+    
+    /**
+     * AJAX handler for getting menu group data
+     */
+    public function ajax_get_menu_group() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dmm_menu_groups';
+        
+        $group_id = intval($_POST['group_id']);
+        
+        $group = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d",
+            $group_id
+        ));
+        
+        if (!$group) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => __('Menu group not found', 'daily-menu-manager')
+            ));
+            return;
+        }
+        
+        wp_send_json(array(
+            'success' => true,
+            'data' => $group
+        ));
+    }
+    
+    /**
+     * AJAX handler for deleting menu group
+     */
+    public function ajax_delete_menu_group() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $groups_table = $wpdb->prefix . 'dmm_menu_groups';
+        $entries_table = $wpdb->prefix . 'dmm_menus';
+        
+        $group_id = intval($_POST['group_id']);
+        
+        // Begin transaction
+        $wpdb->query('START TRANSACTION');
+        
+        // First delete all entries in this group
+        $entries_deleted = $wpdb->delete(
+            $entries_table,
+            array('group_id' => $group_id),
+            array('%d')
+        );
+        
+        // Then delete the group itself
+        $group_deleted = $wpdb->delete(
+            $groups_table,
+            array('id' => $group_id),
+            array('%d')
+        );
+        
+        if ($group_deleted) {
+            $wpdb->query('COMMIT');
+            $response = array(
+                'success' => true,
+                'message' => sprintf(
+                    __('Menu group deleted successfully. %d daily entries were also removed.', 'daily-menu-manager'),
+                    $entries_deleted
+                )
+            );
+        } else {
+            $wpdb->query('ROLLBACK');
+            $response = array(
+                'success' => false,
+                'message' => __('Failed to delete menu group', 'daily-menu-manager')
+            );
+        }
+        
+        wp_send_json($response);
+    }
+    
+    /**
+     * AJAX handler for getting menu entry data
+     */
+    public function ajax_get_menu_entry() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dmm_menus';
+        
+        $entry_id = intval($_POST['entry_id']);
+        
+        $entry = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM $table_name WHERE id = %d",
+            $entry_id
+        ));
+        
+        if (!$entry) {
+            wp_send_json(array(
+                'success' => false,
+                'message' => __('Menu entry not found', 'daily-menu-manager')
+            ));
+            return;
+        }
+        
+        // Add formatted date for display
+        $entry->formatted_date = date_i18n(get_option('date_format'), strtotime($entry->menu_date));
+        
+        wp_send_json(array(
+            'success' => true,
+            'data' => $entry
+        ));
+    }
+    
+    /**
+     * AJAX handler for saving menu entry
+     */
+    public function ajax_save_menu_entry() {
+        // Check nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'dmm_nonce')) {
+            wp_die(__('Security check failed', 'daily-menu-manager'));
+        }
+        
+        global $wpdb;
+        $table_name = $wpdb->prefix . 'dmm_menus';
+        
+        $entry_id = intval($_POST['entry_id']);
+        $menu_items = wp_kses_post($_POST['menu_items']);
+        $is_active = isset($_POST['is_active']) && $_POST['is_active'] ? 1 : 0;
+        
+        $data = array(
+            'menu_items' => $menu_items,
+            'is_active' => $is_active
+        );
+        
+        $format = array('%s', '%d');
+        
+        $updated = $wpdb->update(
+            $table_name,
+            $data,
+            array('id' => $entry_id),
+            $format,
+            array('%d')
+        );
+        
+        if ($updated !== false) {
+            $response = array(
+                'success' => true,
+                'message' => __('Menu entry updated successfully', 'daily-menu-manager')
+            );
+        } else {
+            $response = array(
+                'success' => false,
+                'message' => __('Failed to update menu entry', 'daily-menu-manager')
+            );
+        }
+        
+        wp_send_json($response);
+    }
 }
