@@ -77,7 +77,7 @@ class DMM_Admin {
             'Menu Manager',
             'manage_options',
             'dmm-dashboard',
-            array($this, 'display_dashboard'),
+            array($this, 'display_plugin_admin_dashboard'),
             'dashicons-food',
             30
         );
@@ -111,7 +111,7 @@ class DMM_Admin {
         
         // Submenu - Locations
         add_submenu_page(
-            'daily-menu-manager',
+            'dmm-dashboard',
             __('Manage Locations', 'daily-menu-manager'),
             __('Locations', 'daily-menu-manager'),
             'manage_options',
@@ -121,7 +121,7 @@ class DMM_Admin {
         
         // Submenu - Settings
         add_submenu_page(
-            'daily-menu-manager',
+            'dmm-dashboard',
             __('Settings', 'daily-menu-manager'),
             __('Settings', 'daily-menu-manager'),
             'manage_options',
@@ -147,9 +147,9 @@ class DMM_Admin {
     }
 
     /**
-     * Display the dashboard page
+     * Render the admin dashboard page
      */
-    public function display_dashboard() {
+    public function display_plugin_admin_dashboard() {
         include_once('partials/dmm-admin-dashboard.php');
     }
     
